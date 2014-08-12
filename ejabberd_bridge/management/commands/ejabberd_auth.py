@@ -24,6 +24,9 @@ from django.core.management.base import BaseCommand
 __author__ = "fabio"
 
 
+AT_REPLACE_CHAR = '%'
+
+
 class Command(BaseCommand):
     logger = logging.getLogger(__name__)
 
@@ -46,13 +49,19 @@ class Command(BaseCommand):
         sys.stdout.write(b.decode("utf-8"))
         sys.stdout.flush()
 
-    def auth(self, username=None, server="localhost", password=None):
+    def auth(self, username=None, server="localhost", password=None, at_replaced=False):
         self.logger.debug("Authenticating %s with password %s on server %s" % (username, password, server))
         #TODO: would be nice if this could take server into account
         user = authenticate(username=username, password=password)
-        return user and user.is_active
+        authorized = user and user.is_active
 
-    def isuser(self, username=None, server="localhost"):
+        if not (authorized or at_replaced): # NOR gate
+            username = '@'.join(username.split(AT_REPLACE_CHAR))
+            authorized = self.auth(username, server, password, True)
+
+        return authorized
+
+    def isuser(self, username=None, server="localhost", at_replaced=False):
         """
         Checks if the user exists and is active
         """
@@ -61,12 +70,18 @@ class Command(BaseCommand):
         try:
             user = get_user_model().objects.get(username=username)
             if user.is_active:
-                return True
+                exists = True
             else:
                 self.logger.warning("User %s is disabled" % username)
-                return False
+                exists = False
         except User.DoesNotExist:
-            return False
+            exists = False
+
+        if not (exists or at_replaced): # ^(a or b) == (^a) and (^b)
+            username = '@'.join(username.split(AT_REPLACE_CHAR))
+            exists = self.isuser(username, server, True)
+
+        return exists
 
     def setpass(self, username=None, server="localhost", password=None):
         """
@@ -98,13 +113,15 @@ class Command(BaseCommand):
         try:
             while True:
                 data = self.from_ejabberd()
-                self.logger.debug("Command is %s" % data[0])
-                if data[0] == "auth":
-                    success = self.auth(data[1], data[2], data[3])
-                elif data[0] == "isuser":
-                    success = self.isuser(data[1], data[2])
-                elif data[0] == "setpass":
-                    success = self.setpass(data[1], data[2], data[3])
+                command, username, args = data[0], data[1], data[2:]
+
+                self.logger.debug("Command is %s" % command)
+                if command == "auth":
+                    success = self.auth(username, args[0], args[1])
+                elif command == "isuser":
+                    success = self.isuser(username, args[0])
+                elif command == "setpass":
+                    success = self.setpass(username, args[0], args[1])
                 self.to_ejabberd(success)
                 if not options.get("run_forever", True):
                     break

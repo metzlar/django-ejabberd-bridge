@@ -20,6 +20,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from mock import patch
 from ejabberd_bridge.management.commands import ejabberd_auth
+from ejabberd_bridge.management.commands.ejabberd_auth import AT_REPLACE_CHAR
 
 __author__ = 'fabio'
 
@@ -85,6 +86,15 @@ class AuthBridgeTestCase(TestCase):
         username = "admin"
         self.assertTrue(self.cmd.isuser(username=username, server=self.srv))
 
+    def test_isuser_at_ok(self):
+        """
+        Tests isuser command with a user that has an at sign in his
+        username.
+        """
+        username = 'user03' + AT_REPLACE_CHAR + 'example.com'
+        self.assertTrue(
+            self.cmd.isuser(username=username, server=self.srv))
+
     def test_isuser_does_not_exists(self):
         """
         Tests isuser command with an user which does not exist
@@ -106,6 +116,18 @@ class AuthBridgeTestCase(TestCase):
         username = "user02"
         password = "password"
         self.assertTrue(self.cmd.auth(username=username, server=self.srv, password=password))
+
+    def test_auth_at_ok(self):
+        """
+        Tests auth command with a user that has an at sign in his
+        username.
+        """
+        username = "user03" + AT_REPLACE_CHAR + "example.com"
+        password = "password"
+        self.assertTrue(
+            self.cmd.auth(
+                username=username,
+                server=self.srv, password=password))
 
     def test_auth_wrong_password(self):
         """
